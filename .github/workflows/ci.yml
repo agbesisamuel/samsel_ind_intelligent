@@ -1,0 +1,76 @@
+# Local synthetic stack only; this workflow never deploys or enables customer monitoring.
+name: Sprint foundation
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: foundation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Generate unique local configuration
+        run: make setup
+      - name: Build and start all local services
+        run: make up
+      - name: Verify idempotent migrations
+        run: make migrate
+      # Fixtures are reserved synthetic identities; no real customer or device data is seeded.
+      - name: Seed isolated fictional tenants for browser acceptance
+        run: make seed-demo
+      - name: Backend and frontend tests
+        run: make test
+      - name: Lint, format, types and migration drift
+        run: make lint
+      - name: Real infrastructure round trips
+        run: make smoke
+      - name: Synthetic account mail through broker and worker
+        run: make auth-smoke
+      - name: Synthetic durable HTTPS and MQTT ingestion
+        run: make telemetry-smoke
+      - name: Synthetic read-only SDK buffered replay
+        run: python scripts/dev.py adapter-smoke
+      - name: Real MFA and manual finance draft export
+        run: python scripts/dev.py commercial-smoke
+      - name: Verified TEST email through durable dispatcher
+        run: python scripts/dev.py notification-smoke
+      - name: Encrypted private evidence round trip
+        run: python scripts/dev.py evidence-smoke
+      - name: Asynchronous encrypted PDF and CSV report drill
+        run: python scripts/dev.py report-smoke
+      - name: Frontend build
+        run: docker compose exec -T web npm run build
+      - name: Contract regeneration and drift
+        run: |
+          make contracts
+          git diff --exit-code -- packages/api-contracts
+      - name: Dependency vulnerability scans
+        run: make audit
+      - name: Secret scan
+        run: make secret-scan
+      - name: Runtime SQL privileges, security headers and audit chains
+        run: make security-check
+      - name: Isolated encrypted database and object restore
+        run: make restore-drill
+      - name: Synthetic 20-site reference cadence and latency gates
+        run: make reference-load
+      - name: Browser smoke against actual stack
+        run: |
+          npm --prefix apps/web ci
+          cd apps/web
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - name: Cleanup synthetic stack
+        if: always()
+        run: docker compose down --remove-orphans

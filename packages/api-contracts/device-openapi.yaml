@@ -1,0 +1,113 @@
+openapi: 3.1.0
+info:
+  title: SAMSEL Industrial Intelligence — Foundation API
+  version: 0.1.0
+  description: Local identity and tenant administration. No monitoring or device control.
+paths:
+  /api/v1/device/ingest/:
+    post:
+      operationId: ingest_create
+      description: 'No all-or-nothing batch claim: receipts identify each independently
+        durable event.'
+      tags:
+      - ingest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Receipt'
+          description: ''
+  /api/v1/device/receipts/{event_id}/:
+    get:
+      operationId: receipts_retrieve
+      description: Resolve only this gateway's records; unknown/foreign events remain
+        indistinguishable.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - receipts
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+          description: ''
+components:
+  schemas:
+    Event:
+      type: object
+      description: Offsets are mandatory; engineering limits are not food-safety thresholds.
+      properties:
+        version:
+          $ref: '#/components/schemas/VersionEnum'
+        event_id:
+          type: string
+          format: uuid
+        sensor_id:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        observed_at:
+          type: string
+          format: date-time
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
+        unit:
+          $ref: '#/components/schemas/UnitEnum'
+      required:
+      - event_id
+      - observed_at
+      - sensor_id
+      - sequence
+      - unit
+      - value
+      - version
+    Receipt:
+      type: object
+      description: Application receipt represents committed storage, distinct from
+        an MQTT PUBACK.
+      properties:
+        status:
+          type: string
+        reading_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+      required:
+      - status
+    UnitEnum:
+      enum:
+      - degC
+      type: string
+      description: '* `degC` - degC'
+    VersionEnum:
+      enum:
+      - 1
+      type: integer
+      description: '* `1` - 1'

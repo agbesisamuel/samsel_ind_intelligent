@@ -1,0 +1,316 @@
+# Local synthetic development only. No production override or customer data support.
+name: sii-local
+x-api: &api
+  build:
+    context: .
+    dockerfile: infra/docker/api.Dockerfile
+  env_file: .env
+  environment:
+    SII_ENV: ${SII_ENV:?Run setup first}
+    POSTGRES_HOST: postgres
+    SII_DB_RUNTIME: "1"
+  volumes:
+    - ./apps/api:/workspace/apps/api
+    - ./packages/api-contracts:/workspace/packages/api-contracts
+    - ./scripts:/workspace/scripts:ro
+  networks: [private]
+  init: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+services:
+  tls-init:
+    <<: *api
+    user: "0:0"
+    command: [python, /workspace/scripts/dev_tls.py]
+    environment: {SII_ENV: local}
+    env_file: []
+    networks: []
+    network_mode: none
+    read_only: true
+    volumes:
+      - ./scripts/dev_tls.py:/workspace/scripts/dev_tls.py:ro
+      - tls-public:/tls-public
+      - tls-private:/tls-private
+      - simulator-data:/simulator
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    restart: "no"
+  postgres:
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Run setup}
+      POSTGRES_USER: ${POSTGRES_USER:?Run setup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  rabbitmq:
+    image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?Run setup}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?Run setup}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - tls-public:/tls-public:ro
+      - tls-private:/tls-private:ro
+    networks: [private, edge]
+    ports: ["127.0.0.1:8883:8883"]
+    depends_on:
+      tls-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+  redis:
+    image: redis:8.2.10-bookworm@sha256:47670742d7924adbcdb404d1288b6327815b23141969c0939b8e5d61f78c2634
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run setup}
+    command: [sh, -c, 'exec redis-server --requirepass "$${REDIS_PASSWORD}" --appendonly yes']
+    volumes: [redis-data:/data]
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  object-store:
+    # S3-only proxy keeps SeaweedFS's mandatory gRPC control port off the app network.
+    image: nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+    entrypoint: [nginx, -g, "daemon off;"]
+    user: "10001:10001"
+    volumes: [./infra/docker/object-store.nginx.conf:/etc/nginx/nginx.conf:ro]
+    networks: [private, storage]
+    read_only: true
+    tmpfs: [/tmp:mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      object-store-backend: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, 'test "$$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" http://localhost:8333/)" = 403']
+      interval: 10s
+      timeout: 6s
+      retries: 20
+  object-store-backend:
+    build:
+      context: .
+      dockerfile: infra/docker/object-store.Dockerfile
+    environment:
+      SII_ENV: ${SII_ENV:?Run setup}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Run setup}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Run setup}
+    volumes: [object-store-data:/data]
+    networks: [storage]
+    read_only: true
+    tmpfs: [/tmp:mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    healthcheck:
+      test: [CMD, /bin/sh, /opt/sii/storage-probe.sh, health]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  smtp:
+    image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    networks: [private, edge]
+    ports: ["127.0.0.1:8025:8025"]
+    healthcheck:
+      test: [CMD, /mailpit, readyz]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  migrate:
+    <<: *api
+    command: [python, manage.py, prepare_local_database]
+    environment: {SII_ENV: local, POSTGRES_HOST: postgres, SII_DB_RUNTIME: "0"}
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+  api:
+    <<: *api
+    networks: [private, edge]
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready/', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 20
+  worker:
+    <<: *api
+    command: [celery, -A, config.celery, worker, --loglevel=WARNING, --concurrency=2, --hostname=foundation@%h]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, 'celery -A config.celery inspect ping -d "foundation@$${HOSTNAME}" --timeout=5']
+      interval: 20s
+      timeout: 10s
+      retries: 15
+  telemetry-bootstrap:
+    <<: *api
+    command: [python, manage.py, telemetry_worker, bootstrap]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+    restart: "no"
+  telemetry-worker: &telemetry-worker
+    <<: *api
+    command: [python, manage.py, telemetry_worker, group]
+    restart: unless-stopped
+    depends_on:
+      telemetry-bootstrap: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import os,time; assert time.time()-os.stat('/tmp/telemetry-heartbeat').st_mtime < 60"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  telemetry-worker-1:
+    <<: *telemetry-worker
+    command: [python, manage.py, telemetry_worker, group, --group, "1"]
+  telemetry-worker-2:
+    <<: *telemetry-worker
+    command: [python, manage.py, telemetry_worker, group, --group, "2"]
+  telemetry-worker-3:
+    <<: *telemetry-worker
+    command: [python, manage.py, telemetry_worker, group, --group, "3"]
+  # Confirmed publishing cannot block a shard's ordered consumer loop.
+  telemetry-publisher:
+    <<: *telemetry-worker
+    command: [python, manage.py, telemetry_worker, publish]
+  device-api:
+    <<: *api
+    environment:
+      SII_ENV: ${SII_ENV:?Run setup first}
+      POSTGRES_HOST: postgres
+      DJANGO_SETTINGS_MODULE: config.settings.device
+      SII_DB_RUNTIME: "1"
+    command:
+      - gunicorn
+      - config.device_wsgi:application
+      - --bind
+      - "0.0.0.0:8443"
+      - --workers
+      # Four processes keep the 800-probe reference ingress from turning queued
+      # requests into late backfill; per-gateway locks and safety checks remain.
+      - "4"
+      - --threads
+      - "4"
+      - --certfile
+      - /tls-private/device-api/tls.crt
+      - --keyfile
+      - /tls-private/device-api/tls.key
+      # Empty trusted-proxy list prevents clients spoofing the TLS boundary.
+      - "--forwarded-allow-ips="
+    networks: [private, edge]
+    ports: ["127.0.0.1:8443:8443"]
+    volumes:
+      - ./apps/api:/workspace/apps/api
+      - simulator-data:/simulator
+      - tls-public:/tls-public:ro
+      - tls-private:/tls-private:ro
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      tls-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import socket,ssl; c=ssl.create_default_context(cafile='/tls-public/ca.crt'); c.wrap_socket(socket.create_connection(('localhost',8443),5),server_hostname='localhost').close()"]
+      interval: 10s
+      timeout: 6s
+      retries: 20
+  freshness-worker:
+    <<: *api
+    command: [python, manage.py, watch_freshness]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import os,time; assert time.time()-os.stat('/tmp/freshness-heartbeat').st_mtime < 60"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  notification-worker:
+    <<: *api
+    command: [python, manage.py, dispatch_notifications]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      smtp: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import os,time; assert time.time()-os.stat('/tmp/notification-heartbeat').st_mtime < 90"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  report-worker:
+    <<: *api
+    command: [python, manage.py, build_reports]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      object-store: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import os,time; assert time.time()-os.stat('/tmp/report-heartbeat').st_mtime < 360"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  domain-worker:
+    <<: *api
+    command: [python, manage.py, domain_worker]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      telemetry-bootstrap: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import os,time; assert time.time()-os.stat('/tmp/domain-heartbeat').st_mtime < 90"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    environment:
+      API_PROXY_TARGET: http://api:8000
+      SII_WATCH_POLLING: "true"
+    ports: ["127.0.0.1:5173:5173"]
+    volumes:
+      - ./apps/web/src:/workspace/apps/web/src
+      - ./apps/web/tests:/workspace/apps/web/tests
+      - ./packages/api-contracts:/workspace/packages/api-contracts
+    networks: [edge]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+networks:
+  private: {internal: true}
+  storage: {internal: true}
+  edge: {}
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  redis-data:
+  object-store-data:
+  # v2 supplies strict RFC 5280 extensions; initial unused fixtures remain unmounted.
+  tls-public:
+    name: sii-local_tls-public-v2
+  tls-private:
+    name: sii-local_tls-private-v2
+  simulator-data:

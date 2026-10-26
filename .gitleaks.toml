@@ -1,0 +1,10 @@
+# Upstream rules plus exclusions limited to local/generated installation artifacts.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignored local secrets, dependencies and generated build output"
+paths = [
+  '''(^|/)\.env$''',
+  '''(^|/)(\.venv|node_modules|dist|\.artifacts|\.git|test-results|playwright-report)/'''
+]

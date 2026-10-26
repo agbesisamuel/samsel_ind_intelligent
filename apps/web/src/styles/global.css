@@ -1,0 +1,477 @@
+/* Foundation shell: visible focus, readable status labels, and no false healthy metrics. */
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #203b40;
+  background: #f5f7f6;
+  font-synthesis: none;
+  line-height: 1.6;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+select {
+  font: inherit;
+}
+a {
+  color: inherit;
+}
+button,
+select {
+  border: 1px solid #aabbb9;
+  background: white;
+  color: #203b40;
+  border-radius: 5px;
+  padding: 8px 12px;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+:focus-visible {
+  outline: 3px solid #aa560a;
+  outline-offset: 4px;
+}
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -80px;
+  z-index: 10;
+  background: white;
+  padding: 12px;
+}
+.skip:focus {
+  top: 12px;
+}
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  padding: 30px 20px;
+  background: #17383d;
+  color: #ecf3f1;
+  display: flex;
+  flex-direction: column;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  margin-bottom: 40px;
+}
+.brand-mark {
+  border: 1px solid #8ca5a4;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+}
+.brand strong {
+  display: block;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+}
+.brand small {
+  font-size: 11px;
+  color: #bacdcb;
+}
+nav {
+  display: grid;
+  gap: 4px;
+}
+nav a {
+  padding: 10px 12px;
+  border-radius: 5px;
+  text-decoration: none;
+  color: #d4e1de;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+nav a:hover {
+  background: #23474c;
+}
+nav a.active {
+  background: #36595c;
+  color: white;
+  box-shadow: inset 3px 0 #b9d5c6;
+}
+.nav-mark {
+  color: #b5c7c4;
+}
+.sidebar-footer {
+  font-size: 11px;
+  line-height: 1.9;
+  color: #b5c7c4;
+  margin-top: auto;
+  padding-top: 40px;
+}
+.body {
+  flex: 1;
+  min-width: 0;
+}
+.topbar {
+  height: 82px;
+  padding: 0 44px;
+  border-bottom: 1px solid #d9e2df;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  gap: 20px;
+}
+.local-label {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  color: #81580d;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  font-size: 12px;
+}
+.toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.signed-out {
+  color: #52676b;
+}
+main {
+  max-width: 1280px;
+  margin: auto;
+  padding: 50px 60px 30px;
+}
+.eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #5a7173;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+h1 {
+  font-size: clamp(28px, 3.3vw, 44px);
+  line-height: 1.17;
+  letter-spacing: -0.035em;
+  font-weight: 620;
+  max-width: 680px;
+  margin: 0 0 20px;
+}
+.intro {
+  max-width: 680px;
+  color: #52676b;
+  font-size: 16px;
+  margin-bottom: 38px;
+}
+h2 {
+  font-size: 15px;
+  margin: 0 0 6px;
+  font-weight: 650;
+}
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.connection {
+  border: 1px solid #d5dfdc;
+  background: white;
+  padding: 23px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+}
+.connection p {
+  font-size: 12px;
+  margin: 0;
+  max-width: 380px;
+  color: #5a7173;
+}
+.connection-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.connection button {
+  font-size: 12px;
+}
+.status {
+  font-size: 12px;
+  color: #34556d;
+}
+.status.error {
+  color: #9c3430;
+  font-weight: 700;
+}
+.workspace {
+  margin-top: 32px;
+  border: 1px solid #d5dfdc;
+  background: #fff;
+}
+.section-heading {
+  padding: 22px 26px;
+  border-bottom: 1px solid #e1e8e5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.section-heading h2 {
+  margin: 0;
+}
+.badge {
+  font-size: 10px;
+  border: 1px solid #c8d1ce;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #526360;
+}
+.empty {
+  text-align: center;
+  padding: 32px 24px 44px;
+}
+.empty-mark {
+  display: block;
+  font-size: 34px;
+  color: #869b99;
+}
+.empty h3 {
+  margin: 6px 0 10px;
+}
+.empty p {
+  font-size: 13px;
+  color: #5a7173;
+  max-width: 470px;
+  margin: auto;
+}
+.safety {
+  margin-top: 40px;
+  border-left: 3px solid #b48b3e;
+  padding: 0 18px;
+}
+.safety strong {
+  font-size: 12px;
+}
+.safety p {
+  font-size: 12px;
+  color: #52676b;
+  margin: 4px 0;
+}
+.notice {
+  border: 1px solid #cbd8d4;
+  padding: 25px;
+  background: white;
+}
+.back {
+  display: inline-block;
+  margin-top: 30px;
+}
+@media (max-width: 1050px) {
+  .sidebar {
+    width: 225px;
+  }
+  main {
+    padding: 36px 30px;
+  }
+  .topbar {
+    padding: 0 30px;
+  }
+  .connection {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .connection-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+@media (max-width: 700px) {
+  .shell {
+    display: block;
+  }
+  .sidebar {
+    width: 100%;
+    padding: 20px;
+  }
+  .brand {
+    margin-bottom: 18px;
+  }
+  nav {
+    display: flex;
+    overflow-x: auto;
+    padding: 4px;
+  }
+  nav a {
+    white-space: nowrap;
+    gap: 10px;
+  }
+  .sidebar-footer {
+    display: none;
+  }
+  .topbar {
+    height: auto;
+    min-height: 74px;
+    padding: 14px 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .toolbar {
+    gap: 14px;
+  }
+  main {
+    padding: 30px 20px;
+  }
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+/* Administration uses native labelled controls and scrollable evidence tables. */
+.admin-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+  margin-block: 1rem;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 100%;
+}
+.form-field input,
+.form-field select {
+  padding: 0.65rem;
+  border: 1px solid #a7b6b4;
+  border-radius: 5px;
+  font: inherit;
+  max-width: 100%;
+  background: white;
+  color: #172b29;
+}
+.admin-form button {
+  padding: 0.65rem 1rem;
+}
+.workspace {
+  margin-block: 1.5rem;
+}
+.secret {
+  overflow-wrap: anywhere;
+  display: inline-block;
+  margin-block: 1rem;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #dbe3e1;
+}
+.toolbar {
+  flex-wrap: wrap;
+}
+/* Wrap inventory tabs and keep missing qualification visible without relying on color. */
+.inventory-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1.5rem;
+}
+.inventory-tabs button {
+  padding: 0.6rem 0.8rem;
+}
+.inventory-tabs [aria-current="page"] {
+  font-weight: 700;
+  outline: 2px solid #176d60;
+}
+.form-field input[type="checkbox"] {
+  align-self: start;
+  width: 1.2rem;
+  height: 1.2rem;
+}
+/* Long immutable evidence stays readable without widening the mobile viewport. */
+.evidence-json {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+/* Observation cards and graphs preserve readable narrow-screen layouts without hiding gaps. */
+.monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 1rem;
+}
+.monitor-card {
+  padding: 1rem;
+  border: 1px solid #cad4dc;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.monitor-card dl {
+  margin: 0;
+}
+.monitor-card dd {
+  margin: 0 0 0.5rem;
+}
+.reading-value {
+  font-size: 1.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.series-chart {
+  width: 100%;
+  max-height: 240px;
+  color: #245f85;
+}
+.table-scroll {
+  overflow-x: auto;
+  max-height: 360px;
+  margin: 1rem 0;
+}
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-scroll th,
+.table-scroll td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #cad4dc;
+  white-space: nowrap;
+}
+textarea {
+  max-width: 100%;
+  width: 100%;
+}
+/* Escaped customer support text keeps paragraphs without widening mobile layouts. */
+.support-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
